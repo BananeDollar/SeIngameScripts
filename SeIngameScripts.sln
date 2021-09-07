@@ -1,0 +1,46 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30406.217
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BatteryMonitor", "SeIngameScripts\BatteryMonitor.csproj", "{ABF812D9-87E8-445E-BE7B-C34AE17DAB33}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SE_ShipControll", "SE_ShipControll\SE_ShipControll.csproj", "{33557E61-D132-46F9-A020-BAD773499B0A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BD-CarBase", "BD-CarBase\BD-CarBase.csproj", "{CCBF5D6A-1DCC-4B51-A7D2-C4D93FC6EC84}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BD-ShipOS", "Sensor\BD-ShipOS.csproj", "{8A03B730-211A-478E-9A0F-5033E7269CCE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TrainControll_Base", "TrainControll\TrainControll_Base.csproj", "{A584FC97-E073-4A19-B14F-C4A7A4C11D73}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TrainControll_Train", "TrainControll_Train\TrainControll_Train.csproj", "{2BE527A7-B504-48A2-8D78-A68E3CB9B0E9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Casino", "Casino\Casino.csproj", "{689D2D78-DCAA-4A0C-83E3-F2611BB48A7F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{ABF812D9-87E8-445E-BE7B-C34AE17DAB33}.Debug|x64.ActiveCfg = Debug|x64
+		{ABF812D9-87E8-445E-BE7B-C34AE17DAB33}.Debug|x64.Build.0 = Debug|x64
+		{33557E61-D132-46F9-A020-BAD773499B0A}.Debug|x64.ActiveCfg = Debug|x64
+		{33557E61-D132-46F9-A020-BAD773499B0A}.Debug|x64.Build.0 = Debug|x64
+		{CCBF5D6A-1DCC-4B51-A7D2-C4D93FC6EC84}.Debug|x64.ActiveCfg = Debug|x64
+		{CCBF5D6A-1DCC-4B51-A7D2-C4D93FC6EC84}.Debug|x64.Build.0 = Debug|x64
+		{8A03B730-211A-478E-9A0F-5033E7269CCE}.Debug|x64.ActiveCfg = Debug|x64
+		{8A03B730-211A-478E-9A0F-5033E7269CCE}.Debug|x64.Build.0 = Debug|x64
+		{A584FC97-E073-4A19-B14F-C4A7A4C11D73}.Debug|x64.ActiveCfg = Debug|x64
+		{A584FC97-E073-4A19-B14F-C4A7A4C11D73}.Debug|x64.Build.0 = Debug|x64
+		{2BE527A7-B504-48A2-8D78-A68E3CB9B0E9}.Debug|x64.ActiveCfg = Debug|x64
+		{2BE527A7-B504-48A2-8D78-A68E3CB9B0E9}.Debug|x64.Build.0 = Debug|x64
+		{689D2D78-DCAA-4A0C-83E3-F2611BB48A7F}.Debug|x64.ActiveCfg = Debug|x64
+		{689D2D78-DCAA-4A0C-83E3-F2611BB48A7F}.Debug|x64.Build.0 = Debug|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {68851C4A-C032-4245-995D-7FCC42DF0D94}
+	EndGlobalSection
+EndGlobal
