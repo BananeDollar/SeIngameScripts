@@ -58,7 +58,6 @@ namespace IngameScript
 
         public void Main(string argument, UpdateType updateSource)
         {
-            Echo("Arg: " + argument);
             string[] args = argument.Split('-');
             if (args.Length == 3)
             {
@@ -80,21 +79,24 @@ namespace IngameScript
 
             public static int[] betValues = new int[] { 50, 100, 150, 200, 250, 500, 1000, 1500, 2000, 2500, 5000, 10000, 15000, 20000, 25000, 50000, 100000, 150000, 200000, 250000, 500000, 1000000, 1500000, 2000000, 2500000, 5000000, 10000000 };
 
-            Player[] stations;
+            Player[] players;
             IMyTextSurface display;
             public GameState state;
             public List<PlayingCard> gameCards;
             public List<PlayingCard> dealerCards;
+            List<Player> playingPlayers;
+            int currentPlayer = -1;
+
 
             public enum GameState
             {
                 idle,
                 waiting_for_bets,
-                round_start
+                playing
             }
 
             public BlackJack(Player[] stations, IMyTextSurface display) {
-                this.stations = stations;
+                this.players = stations;
                 this.display = display;
 
                 gameCards = GetNewDeck();
@@ -111,19 +113,17 @@ namespace IngameScript
 
                 MySpriteDrawFrame frame = display.DrawFrame();
 
-                for (int i = 0; i < stations.Length; i++)
+                for (int i = 0; i < players.Length; i++)
                 {
                     int x = i * (512 / 3) + 5;
                     int y = 250;
                     int width = (512 / 3) - 10;
                     int height = 150;
 
-                    stations[i].DrawMainScreen(ref frame, x, y, width, height);
+                    players[i].DrawMainScreen(ref frame, x, y, width, height);
                 }
 
-                if (!CheckForPlayersReady()) {
-                    Util.DrawText(ref frame, 512 / 2, 100, "Warte auf Wetteinsätze", Color.Yellow);
-                }
+                Util.DrawText(ref frame, 512 / 2, 100, state.ToString(), Color.Yellow);
 
                 //Random r = new Random();
                 //for (int i = 0; i < 10; i++)
@@ -137,48 +137,160 @@ namespace IngameScript
 
             public void OnActionCall(string arg, int id)
             {
+                Player player = players[id];
                 if (arg == "SA") // Sensor Activate
                 {
-                    stations[id].EnterSensor();
+                    if (state != GameState.playing)
+                    {
+                        player.EnterSensor();
+                    }
                 }
                 if (arg == "SD") // Sensor Disable
                 {
-                    stations[id].ExitSensor();
+                    player.ExitSensor();
+                    if (state == GameState.playing)
+                    {
+                        playingPlayers.Remove(player);
+                    }
                 }
                 if (arg.StartsWith("B") && arg.Length == 2) // Buttons
                 {
                     int btnId = int.Parse(arg.Substring(1));
-                    stations[id].ButtonPress(btnId);
+                    switch (player.state)
+                    {
+                        case Player.PlayerState.selectingBet:
+                            player.SelectBet(btnId);
+                            break;
+                        case Player.PlayerState.playing_choosing:
+                            if (playingPlayers.Contains(player))
+                            {
+                                CurrentPlayerChoice(btnId);
+                            }
+                            break;
+                        default:
+                            break;
+                    }
                 }
 
                 UpdateDisplay();
+                CheckForPlayersReady();
+            }
 
-                if (CheckForPlayersReady())
+
+            public void CheckForPlayersReady()
+            {
+                if (state == GameState.waiting_for_bets)
                 {
+                    for (int i = 0; i < players.Length; i++)
+                    {
+                        if (players[i].state != Player.PlayerState.playing_idle) {
+                            return;
+                        }
+                    }
                     StartGame();
                 }
             }
 
-            public bool CheckForPlayersReady() {
-                for (int i = 0; i < stations.Length; i++)
+
+            private void StartGame()
+            {
+                state = GameState.playing;
+
+                playingPlayers = new List<Player>();
+                for (int i = 0; i < players.Length; i++)
                 {
-                    if (stations[i].state == Player.PlayerState.selectingBet)
+                    if (players[i].state == Player.PlayerState.playing_idle)
                     {
-                        return false;
+                        playingPlayers.Add(players[i]);
                     }
                 }
 
-                return true;
-            }
-
-            public void StartGame()
-            {
                 gameCards = GetNewDeck();
+                dealerCards = new List<PlayingCard>();
+
+                foreach (Player p in playingPlayers)
+                {
+                    p.handCards = new List<PlayingCard>();
+                    p.handCards.Add(RemoveRandomCardFromDeck(ref gameCards));
+                }
+
+                dealerCards.Add(RemoveRandomCardFromDeck(ref gameCards));
+
+                currentPlayer = 0;
+                GameRound();
             }
 
-            public void Round()
-            { 
+            private void GameRound()
+            {
+                UpdateDisplay();
 
+                Player p = playingPlayers[currentPlayer];
+                if (p.state == Player.PlayerState.playing_idle)
+                {
+                    p.EnableChoice();
+                }
+                if (p.state == Player.PlayerState.playing_holding)
+                {
+                    CheckForEveryPlayerFinished();
+                    currentPlayer++;
+                    if (currentPlayer > playingPlayers.Count - 1)
+                    {
+                        currentPlayer = 0;
+                    }
+                }
+            }
+
+            private void CurrentPlayerChoice(int id)
+            {
+                Player p = playingPlayers[currentPlayer];
+                p.DisableChoice();
+
+                switch (id)
+                {
+                    case 0: //Card
+                        p.handCards.Add(RemoveRandomCardFromDeck(ref gameCards));
+                        break;
+                    case 1: // Hold
+                        p.state = Player.PlayerState.playing_holding;
+                        break;
+                    case 2: // Split
+
+                        break;
+                    case 3: // Double Down
+                        p.handCards.Add(RemoveRandomCardFromDeck(ref gameCards));
+                        p.state = Player.PlayerState.playing_holding;
+                        break;
+                    default:
+                        break;
+                }
+
+                CheckForEveryPlayerFinished();
+                currentPlayer++;
+                if (currentPlayer > playingPlayers.Count - 1)
+                {
+                    currentPlayer = 0;
+                }
+
+                GameRound();
+            }
+
+            private void CheckForEveryPlayerFinished()
+            {
+                foreach (Player p in playingPlayers)
+                {
+                    if (p.state != Player.PlayerState.playing_holding) {
+                        return;
+                    }
+                }
+
+                UpdateDisplay();
+                GameFinished();
+            }
+
+            private void GameFinished()
+            {
+                dealerCards.Add(RemoveRandomCardFromDeck(ref gameCards));
+                UpdateDisplay();
             }
 
             public class Player
@@ -187,6 +299,8 @@ namespace IngameScript
                 public IMySensorBlock sensor;
                 public string currentUser = "";
                 private int betIndex = 0;
+
+                public bool doubleDown = false;
                 public int betValue { get { return betValues[betIndex]; } }
 
                 public List<PlayingCard> handCards;
@@ -194,9 +308,11 @@ namespace IngameScript
                 public PlayerState state;
 
                 public enum PlayerState {
+                    empty,
                     selectingBet,
                     playing_idle,
-                    empty
+                    playing_choosing,
+                    playing_holding
                 }
                 public Player(IMyBlockGroup blockGroup)
                 {
@@ -241,36 +357,43 @@ namespace IngameScript
                 {
                     state = PlayerState.empty;
                     currentUser = "";
+                    handCards = new List<PlayingCard>();
                     UpdateButtonPannel();
                 }
 
-                public void ButtonPress(int i) {
-                    switch (state)
-                    {
-                        case PlayerState.selectingBet:
-                            if (i == 0 && betIndex > 0)
-                                betIndex--;
-                            if (i == 1 && betIndex < betValues.Length - 1)
-                                betIndex++;
-                            if (i == 3)
-                                SetBet();
-                            break;
-                        case PlayerState.playing_idle:
-
-                            break;
-                        case PlayerState.empty:
-                            break;
-                    }
+                public void SelectBet(int i)
+                {
+                    if (i == 0 && betIndex > 0)
+                        betIndex--;
+                    if (i == 1 && betIndex < betValues.Length - 1)
+                        betIndex++;
+                    if (i == 3)
+                        SetBet();
                     UpdateButtonPannel();
+                }
+
+                public bool CanSplit() {
+                    for (int ha = 0; ha < handCards.Count-1; ha++)
+                    {
+                        for (int hb = ha+1; hb < handCards.Count; hb++)
+                        {
+                            if (handCards[ha].suit == handCards[hb].suit && handCards[ha].value == handCards[hb].value)
+                            {
+                                return true;
+                            }
+                        }
+                    }
+                    return false;
                 }
 
                 private void SetBet()
                 {
                     state = PlayerState.playing_idle;
+                    handCards = new List<PlayingCard>();
                     UpdateButtonPannel();
                 }
 
-                private void UpdateButtonPannel() {
+                public void UpdateButtonPannel() {
                     switch (state)
                     {
                         case PlayerState.empty:
@@ -294,6 +417,16 @@ namespace IngameScript
                             buttonPanel.GetSurface(2).WriteText("");
                             buttonPanel.GetSurface(3).WriteText("");
                             break;
+                        case PlayerState.playing_choosing:
+                            buttonPanel.GetSurface(0).WriteText("Karte");
+                            buttonPanel.GetSurface(3).FontColor = Color.White;
+                            buttonPanel.GetSurface(1).WriteText("Halten");
+                            buttonPanel.GetSurface(3).FontColor = Color.White;
+                            buttonPanel.GetSurface(2).WriteText("Split");
+                            buttonPanel.GetSurface(3).FontColor = Color.Red;
+                            buttonPanel.GetSurface(3).WriteText("Double Down");
+                            buttonPanel.GetSurface(3).FontColor = Color.Aqua;
+                            break;
                     }
                 }
 
@@ -303,12 +436,14 @@ namespace IngameScript
                     Color backgroundColor = (state == PlayerState.empty) ? new Color(2, 2, 2) : new Color(20, 20, 20);
 
                     Util.DrawCube(ref frame, x, y, width, height, backgroundColor);
-                    Util.DrawText(ref frame, x + width / 2, y, currentUser, Color.White);
+                    //Util.DrawText(ref frame, x + width / 2, y, currentUser, Color.White);
+
+                    Util.DrawText(ref frame, x + width / 2, y, state.ToString(), Color.White);
 
                     if (state != PlayerState.empty)
                         Util.DrawText(ref frame, x + width / 2, y + height - 20, string.Format("{0,15:N0}$", betValue), (state == PlayerState.selectingBet) ? Color.Green : Color.White, 0.5F);
 
-                    if (state == PlayerState.playing_idle)
+                    if (handCards!=null)
                     {
                         for (int i = 0; i < handCards.Count; i++)
                         {
@@ -320,6 +455,17 @@ namespace IngameScript
                             Util.DrawText(ref frame, x + width / 2, y + height / 2 + 25, GetValueFromHand(handCards).ToString(), Color.White);
                         }
                     }
+                }
+
+                public void EnableChoice()
+                {
+                    state = PlayerState.playing_choosing;
+                    UpdateButtonPannel();
+                }
+                public void DisableChoice()
+                {
+                    state = PlayerState.playing_idle;
+                    UpdateButtonPannel();
                 }
             }
 
@@ -407,6 +553,14 @@ namespace IngameScript
                 }
             }
 
+            public static PlayingCard RemoveRandomCardFromDeck(ref List<PlayingCard> cards)
+            {
+                Random random = new Random();
+                int index = random.Next(cards.Count);
+                PlayingCard card = cards[index];
+                cards.RemoveAt(index);
+                return card;
+            }
 
             public static List<PlayingCard> GetNewDeck()
             {
