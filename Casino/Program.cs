@@ -35,72 +35,389 @@ namespace IngameScript
 
 
         BlackJack blackJack;
+        Bank bank;
+
+        public static Dictionary<string, int> userMoney;
+        public static Program singleton;
+
+        public static int[] moneyStepValues = new int[] { 50, 100, 150, 200, 250, 500, 1000, 1500, 2000, 2500, 5000, 10000, 15000, 20000, 25000, 50000, 100000, 150000, 200000, 250000, 500000, 1000000, 1500000, 2000000, 2500000, 5000000, 10000000 };
+
 
         public Program()
         {
-            IMyTextSurface lcd = GridTerminalSystem.GetBlockWithName("Monitor") as IMyTextSurface;
+            singleton = this;
 
-            blackJack = new BlackJack(new BlackJack.Player[] {
-            new BlackJack.Player(GridTerminalSystem.GetBlockGroupWithName("BJ0")),
-            new BlackJack.Player(GridTerminalSystem.GetBlockGroupWithName("BJ1")),
-            new BlackJack.Player(GridTerminalSystem.GetBlockGroupWithName("BJ2"))
-            },
-            lcd
+            IMyCargoContainer vault = GridTerminalSystem.GetBlockWithName("Vault") as IMyCargoContainer;
+            IMyTextSurface bankMonitor = GridTerminalSystem.GetBlockWithName("Bank Monitor") as IMyTextSurface;
+
+            bank = new Bank(vault, bankMonitor, new Bank.Station(GridTerminalSystem.GetBlockGroupWithName("BS0")));
+
+            bank.LoadUserMoney(Me);
+
+
+            IMyTextSurface blackJackMonitor = GridTerminalSystem.GetBlockWithName("BlackJack Monitor") as IMyTextSurface;
+
+            blackJack = new BlackJack(
+                blackJackMonitor,
+                new BlackJack.Player(GridTerminalSystem.GetBlockGroupWithName("BJ0")),
+                new BlackJack.Player(GridTerminalSystem.GetBlockGroupWithName("BJ1")),
+                new BlackJack.Player(GridTerminalSystem.GetBlockGroupWithName("BJ2"))
             );
+
 
             Runtime.UpdateFrequency = UpdateFrequency.Update100;
         }
 
         public void Save()
         {
-
+            bank.SaveUserMoney(Me);
         }
 
         public void Main(string argument, UpdateType updateSource)
         {
-            string[] args = argument.Split('-');
-            if (args.Length == 3)
+            switch (argument)
             {
-                int id = int.Parse(args[1]);
+                case "save":
+                    bank.SaveUserMoney(Me);
+                    Echo("Saved!");
+                    break;
+                case "load":
+                    bank.LoadUserMoney(Me);
+                    Echo("Loaded!");
+                    break;
+                default:
+                    string[] args = argument.Split('-');
+                    if (args.Length == 3)
+                    {
+                        int id = int.Parse(args[1]);
 
-                switch (args[0])
+                        switch (args[0])
+                        {
+                            case "BJ":
+                                blackJack.OnActionCall(args[2], id);
+                                break;
+                            case "BS":
+                                bank.OnActionCall(args[2], id);
+                                break;
+                            default:
+                                Echo("Wrong argument!");
+                                break;
+                        }
+                    }
+                    break;
+            }
+
+            if (blackJack.state == BlackJack.GameState.playing)
+            {
+                blackJack.ExecuteDaelayedAction();
+            }
+
+            bank.UpdateTick();
+
+            if (bank.stations[0].cargo.GetInventory().ItemCount > 0)
+            {
+                Echo(bank.stations[0].cargo.GetInventory().GetItemAt(0).Value.Type.SubtypeId);
+            }
+        }
+
+        class Bank
+        {
+            public static Bank singleton;
+            IMyTextSurface bankMonitor;
+            IMyCargoContainer vault;
+            public Station[] stations;
+
+            public Bank(IMyCargoContainer vault, IMyTextSurface bankMonitor, params Station[] stations)
+            {
+                singleton = this;
+                this.bankMonitor = bankMonitor;
+                this.vault = vault;
+                this.stations = stations;
+            }
+
+            public void OnActionCall(string arg, int id)
+            {
+                Station station = stations[id];
+                if (arg == "SA") // Sensor Activate
                 {
-                    case "BJ":
-                        blackJack.OnActionCall(args[2], id);
-                        break;
-                    default:
-                        Echo("Wrong argument!");
-                        break;
+                    station.EnterSensor();
+                }
+                if (arg == "SD") // Sensor Disable
+                {
+                    station.ExitSensor();
+                }
+
+                if (arg.StartsWith("B") && arg.Length == 2) // Buttons
+                {
+                    int btnId = int.Parse(arg.Substring(1));
+                    station.ButtonPress(btnId);
+                }
+            }
+            public void SaveUserMoney(IMyProgrammableBlock Me)
+            {
+                string savetext = "";
+                foreach (var x in userMoney.Select((Entry, Index) => new { Entry, Index }))
+                {
+                    savetext += x.Entry.Key + ":" + x.Entry.Value + "\n";
+                }
+                Me.CustomData = savetext;
+            }
+
+            public void LoadUserMoney(IMyProgrammableBlock Me)
+            {
+                string saveText = Me.CustomData;
+
+                string[] rows = saveText.Split('\n');
+                userMoney = new Dictionary<string, int>();
+
+                if (saveText != "")
+                {
+                    for (int i = 0; i < rows.Length; i++)
+                    {
+                        if (rows[i].Contains(":"))
+                        {
+                            string[] entry = rows[i].Split(':');
+
+                            userMoney.Add(entry[0], int.Parse(entry[1]));
+                        }
+                    }
+                }
+                UpdateBankMonitor();
+            }
+
+            public void UpdateBankMonitor()
+            {
+                bankMonitor.WriteText("User Infos:\n", false);
+                foreach (var x in userMoney.Select((Entry, Index) => new { Entry, Index }))
+                {
+                    bankMonitor.WriteText(x.Entry.Key + ":" + x.Entry.Value+"\n", true);
+                }
+            }
+
+            public int GetMoneyForPlayer(string username)
+            {
+                int value;
+                if (!userMoney.TryGetValue(username, out value))
+                {
+                    value = 0;
+                    userMoney.Add(username, 0);
+                    UpdateBankMonitor();
+                }
+                return value;
+            }
+
+            public void AddMoneyForPlayer(string username, int amount)
+            {
+                if (userMoney.ContainsKey(username))
+                {
+                    userMoney[username] += amount;
+                }
+                else
+                {
+                    userMoney.Add(username, amount);
+                }
+                UpdateBankMonitor();
+            }
+
+            public void UpdateTick()
+            {
+                for (int i = 0; i < stations.Length; i++)
+                {
+                        stations[i].UpdateTick();
+                }
+            }
+
+            public class Station
+            {
+                private IMySensorBlock sensor;
+                public string currentUser;
+                private IMyTextSurface display;
+                public IMyCargoContainer cargo;
+                private IMyShipConnector connector;
+                private IMyTextSurfaceProvider buttonPanel;
+                private int retrieveAmountIndex = 0;
+
+                public Station(IMyBlockGroup blockGroup)
+                {
+                    List<IMyTextSurface> screens = new List<IMyTextSurface>();
+                    blockGroup.GetBlocksOfType(screens);
+
+                    if (screens.Count > 0)
+                    {
+                        display = screens[0];
+
+                        display.ContentType = ContentType.SCRIPT;
+                        display.ScriptForegroundColor = Color.White;
+                        display.ScriptBackgroundColor = Color.Black;
+                        display.Script = "None";
+                    }
+
+                    List<IMyTextSurfaceProvider> buttonPanels = new List<IMyTextSurfaceProvider>();
+                    blockGroup.GetBlocksOfType(buttonPanels);
+
+                    if (buttonPanels.Count > 0)
+                    {
+                        buttonPanel = buttonPanels[0];
+
+                        for (int i = 0; i < 4; i++)
+                        {
+                            IMyTextSurface surface = buttonPanel.GetSurface(i);
+                            surface.ContentType = ContentType.TEXT_AND_IMAGE;
+                            surface.FontColor = Color.White;
+                            surface.BackgroundColor = Color.Black;
+                            surface.FontSize = 5;
+                            surface.Alignment = TextAlignment.CENTER;
+                        }
+                    }
+
+                    List<IMySensorBlock> sensors = new List<IMySensorBlock>();
+                    blockGroup.GetBlocksOfType(sensors);
+                    if (sensors.Count > 0)
+                        sensor = sensors[0];
+
+                    List<IMyCargoContainer> cargos = new List<IMyCargoContainer>();
+                    blockGroup.GetBlocksOfType(cargos);
+                    if (cargos.Count > 0)
+                        cargo = cargos[0];
+
+                    List<IMyShipConnector> connectors = new List<IMyShipConnector>();
+                    blockGroup.GetBlocksOfType(connectors);
+                    if (connectors.Count > 0)
+                        connector = connectors[0];
+                }
+
+                public void EnterSensor()
+                {
+                    retrieveAmountIndex = 0;
+                    currentUser = Util.GetUserNameFromSensor(sensor);
+                    UpdateDisplay();
+                }
+
+                public void ExitSensor()
+                {
+                    currentUser = "";
+                    UpdateDisplay();
+                }
+                public void UpdateDisplay()
+                {
+                    MySpriteDrawFrame frame = display.DrawFrame();
+
+                    if(currentUser != "")
+                    {
+                        Util.DrawText(ref frame, 512 / 2, 100, currentUser.ToString(), Color.White);
+
+                        Util.DrawText(ref frame, 512 / 2, 150, string.Format("{0,15:N0}$", singleton.GetMoneyForPlayer(currentUser)), Color.White);
+                        Util.DrawText(ref frame, 512 / 2, 250, string.Format("{0,15:N0}$", moneyStepValues[retrieveAmountIndex]), Color.White);
+
+                        buttonPanel.GetSurface(0).WriteText("-");
+                        buttonPanel.GetSurface(0).FontSize = 10;
+                        buttonPanel.GetSurface(0).FontColor = (retrieveAmountIndex > 0) ? Color.Green : Color.Red;
+                        buttonPanel.GetSurface(1).WriteText("+");
+                        buttonPanel.GetSurface(1).FontSize = 10;
+                        buttonPanel.GetSurface(1).FontColor = (retrieveAmountIndex < moneyStepValues.Length - 1 && moneyStepValues[retrieveAmountIndex + 1] <= singleton.GetMoneyForPlayer(currentUser)) ? Color.Green : Color.Red;
+                        buttonPanel.GetSurface(2).WriteText("");
+                        buttonPanel.GetSurface(3).WriteText("Abheben");
+                        buttonPanel.GetSurface(3).FontColor = Color.Green;
+                    }
+                    else
+                    {
+                        buttonPanel.GetSurface(0).WriteText("");
+                        buttonPanel.GetSurface(1).WriteText("");
+                        buttonPanel.GetSurface(2).WriteText("");
+                        buttonPanel.GetSurface(3).WriteText("");
+                    }
+
+                    frame.Dispose();
+                }
+
+                public void ButtonPress(int btnId)
+                {
+                    if (currentUser != null && currentUser != "")
+                    {
+                        switch (btnId)
+                        {
+                            case 0:
+                                if (retrieveAmountIndex > 0)
+                                    retrieveAmountIndex--;
+                                break;
+                            case 1:
+                                if (retrieveAmountIndex < moneyStepValues.Length - 1)
+                                    if (moneyStepValues[retrieveAmountIndex+1] <= singleton.GetMoneyForPlayer(currentUser))
+                                        retrieveAmountIndex++;
+                                break;
+                            case 3:
+                                if(moneyStepValues[retrieveAmountIndex]<=singleton.GetMoneyForPlayer(currentUser))
+                                Withdraw(moneyStepValues[retrieveAmountIndex]);
+                                break;
+                            default:
+                                break;
+                        }
+                        UpdateDisplay();
+                    }
+                }
+
+                public void Withdraw(int amount)
+                {
+                    singleton.AddMoneyForPlayer(currentUser, -amount);
+                    singleton.vault.GetInventory().TransferItemTo(connector.GetInventory(), 0, 0, true, amount);
+                }
+
+                public void UpdateTick()
+                {
+                    if (currentUser!=null && currentUser != "")
+                    {
+                        MyInventoryItem? nullitem = cargo.GetInventory().GetItemAt(0);
+                        if (nullitem.HasValue)
+                        {
+                            MyInventoryItem item = nullitem.GetValueOrDefault();
+                            if (item.Type.SubtypeId == "SpaceCredit")
+                            {
+                                cargo.GetInventory().TransferItemTo(singleton.vault.GetInventory(), item);
+                                singleton.AddMoneyForPlayer(currentUser, item.Amount.ToIntSafe());
+                                UpdateDisplay();
+                            }
+                        }
+                    }
                 }
             }
         }
 
         class BlackJack {
 
-            public static int[] betValues = new int[] { 50, 100, 150, 200, 250, 500, 1000, 1500, 2000, 2500, 5000, 10000, 15000, 20000, 25000, 50000, 100000, 150000, 200000, 250000, 500000, 1000000, 1500000, 2000000, 2500000, 5000000, 10000000 };
-
             Player[] players;
             IMyTextSurface display;
             public GameState state;
             public List<PlayingCard> gameCards;
             public List<PlayingCard> dealerCards;
-            List<Player> playingPlayers;
+            List<Player> playingPlayers = new List<Player>();
             int currentPlayer = -1;
+            int[] winAmounts = new int[3];
 
+            public DelayedAction action;
+
+            public enum DelayedAction 
+            { 
+            none,
+            player_pickCard,
+            player_doubleDown,
+            player_holding,
+            player_split,
+            dealer_playing
+            }
 
             public enum GameState
             {
                 idle,
-                waiting_for_bets,
-                playing
+                playing,
+                finished
             }
 
-            public BlackJack(Player[] stations, IMyTextSurface display) {
+            public BlackJack(IMyTextSurface display, params Player[] stations) {
                 this.players = stations;
                 this.display = display;
 
                 gameCards = GetNewDeck();
-
+                state = GameState.idle;
                 UpdateDisplay();
             }
 
@@ -121,6 +438,11 @@ namespace IngameScript
                     int height = 150;
 
                     players[i].DrawMainScreen(ref frame, x, y, width, height);
+
+                    if (winAmounts[i] != 0)
+                    {
+                        Util.DrawText(ref frame, x+50, y-25, string.Format("{0,15:N0}$", winAmounts[i]), Color.Green);
+                    }
                 }
 
                 Util.DrawText(ref frame, 512 / 2, 100, state.ToString(), Color.Yellow);
@@ -131,6 +453,20 @@ namespace IngameScript
                 //    int id = r.Next(0, gameCards.Count);
                 //    gameCards[id].Display(ref frame, 25 * i + 20, 200);
                 //}
+
+
+                if (dealerCards != null)
+                {
+                    for (int i = 0; i < dealerCards.Count; i++)
+                    {
+                        dealerCards[i].Display(ref frame, 512 / 2 - dealerCards.Count * 12 + i * 25, 150);
+                    }
+
+                    if (dealerCards.Count > 0)
+                    {
+                        Util.DrawText(ref frame, 512 / 2, 200, GetValueFromHand(dealerCards).ToString(), Color.White);
+                    }
+                }
 
                 frame.Dispose();
             }
@@ -152,14 +488,20 @@ namespace IngameScript
                     {
                         playingPlayers.Remove(player);
                     }
+
+                    winAmounts[id] = 0;
+                    CheckForEverybodyLeft();
                 }
                 if (arg.StartsWith("B") && arg.Length == 2) // Buttons
                 {
                     int btnId = int.Parse(arg.Substring(1));
+
+                    winAmounts[id] = 0;
                     switch (player.state)
                     {
                         case Player.PlayerState.selectingBet:
                             player.SelectBet(btnId);
+
                             break;
                         case Player.PlayerState.playing_choosing:
                             if (playingPlayers.Contains(player))
@@ -176,21 +518,48 @@ namespace IngameScript
                 CheckForPlayersReady();
             }
 
-
-            public void CheckForPlayersReady()
+            public void CheckForEverybodyLeft()
             {
-                if (state == GameState.waiting_for_bets)
+                if (playingPlayers.Count == 0)
                 {
-                    for (int i = 0; i < players.Length; i++)
+                    if (state == GameState.playing)
                     {
-                        if (players[i].state != Player.PlayerState.playing_idle) {
-                            return;
-                        }
+                        state = GameState.idle;
                     }
-                    StartGame();
+                    dealerCards = new List<PlayingCard>();
+                }
+
+                if (state == GameState.idle)
+                {
+                    dealerCards = new List<PlayingCard>();
                 }
             }
 
+            public void CheckForPlayersReady()
+            {
+                if (state == GameState.idle)
+                {
+                    int readyPlayerCount = 0;
+                    for (int i = 0; i < players.Length; i++)
+                    {
+                        if (players[i].state != Player.PlayerState.empty)
+                        {
+                            if (players[i].state == Player.PlayerState.selectingBet)
+                            {
+                                return;
+                            }
+                            if (players[i].state == Player.PlayerState.playing_idle)
+                            {
+                                readyPlayerCount++;
+                            }
+                        }
+                    }
+                    if (readyPlayerCount > 0)
+                    {
+                        StartGame();
+                    }
+                }
+            }
 
             private void StartGame()
             {
@@ -212,6 +581,7 @@ namespace IngameScript
                 {
                     p.handCards = new List<PlayingCard>();
                     p.handCards.Add(RemoveRandomCardFromDeck(ref gameCards));
+                    p.handCards.Add(RemoveRandomCardFromDeck(ref gameCards));
                 }
 
                 dealerCards.Add(RemoveRandomCardFromDeck(ref gameCards));
@@ -231,12 +601,13 @@ namespace IngameScript
                 }
                 if (p.state == Player.PlayerState.playing_holding)
                 {
-                    CheckForEveryPlayerFinished();
                     currentPlayer++;
                     if (currentPlayer > playingPlayers.Count - 1)
                     {
                         currentPlayer = 0;
                     }
+
+                    GameRound();
                 }
             }
 
@@ -248,48 +619,171 @@ namespace IngameScript
                 switch (id)
                 {
                     case 0: //Card
-                        p.handCards.Add(RemoveRandomCardFromDeck(ref gameCards));
+                        action = DelayedAction.player_pickCard;
+                        delayedCooldown = 1;
                         break;
                     case 1: // Hold
                         p.state = Player.PlayerState.playing_holding;
+                        action = DelayedAction.player_holding;
+                        delayedCooldown = 1;
                         break;
                     case 2: // Split
 
                         break;
                     case 3: // Double Down
-                        p.handCards.Add(RemoveRandomCardFromDeck(ref gameCards));
-                        p.state = Player.PlayerState.playing_holding;
+                        action = DelayedAction.player_doubleDown;
+                        delayedCooldown = 1;
                         break;
                     default:
                         break;
                 }
-
-                CheckForEveryPlayerFinished();
-                currentPlayer++;
-                if (currentPlayer > playingPlayers.Count - 1)
-                {
-                    currentPlayer = 0;
-                }
-
-                GameRound();
             }
 
-            private void CheckForEveryPlayerFinished()
+            private bool CheckForEveryPlayerFinished()
             {
                 foreach (Player p in playingPlayers)
                 {
-                    if (p.state != Player.PlayerState.playing_holding) {
-                        return;
+                    if (p.state != Player.PlayerState.playing_holding)
+                    {
+                        return false;
                     }
                 }
 
-                UpdateDisplay();
-                GameFinished();
+                return true;
             }
 
-            private void GameFinished()
+            int delayedCooldown = 1;
+            public void ExecuteDaelayedAction()
             {
-                dealerCards.Add(RemoveRandomCardFromDeck(ref gameCards));
+                if (action != DelayedAction.none)
+                {
+                    if (delayedCooldown > 0)
+                    {
+                        delayedCooldown--;
+                    }
+                    else
+                    {
+                        delayedCooldown = 1;
+
+                        switch (action)
+                        {
+                            case DelayedAction.player_pickCard:
+                                playingPlayers[currentPlayer].handCards.Add(RemoveRandomCardFromDeck(ref gameCards));
+                                break;
+                            case DelayedAction.player_doubleDown:
+                                playingPlayers[currentPlayer].handCards.Add(RemoveRandomCardFromDeck(ref gameCards));
+                                playingPlayers[currentPlayer].state = Player.PlayerState.playing_holding;
+                                break;
+                            case DelayedAction.player_holding:
+                                playingPlayers[currentPlayer].state = Player.PlayerState.playing_holding;
+                                break;
+                            case DelayedAction.dealer_playing:
+                                DealerPlaying();
+                                break;
+                        }
+
+                        if (GetValueFromHand(playingPlayers[currentPlayer].handCards) >= 21)
+                        {
+                            playingPlayers[currentPlayer].state = Player.PlayerState.playing_holding;
+                        }
+
+                        action = DelayedAction.none;
+
+                        if (CheckForEveryPlayerFinished())
+                        {
+                            UpdateDisplay();
+                            action = DelayedAction.dealer_playing;
+                            DealerStartPlaying();
+                        }
+                        else
+                        {
+                            currentPlayer++;
+                            if (currentPlayer > playingPlayers.Count - 1)
+                            {
+                                currentPlayer = 0;
+                            }
+
+                            GameRound();
+                        }
+                    }
+                }
+            }
+
+            int highestPlayerValue;
+            private void DealerStartPlaying()
+            {
+                highestPlayerValue = -1;
+
+                for (int i = 0; i < playingPlayers.Count; i++)
+                {
+                    int newVal = GetValueFromHand(playingPlayers[i].handCards);
+                    if (newVal > highestPlayerValue && newVal <= 21)
+                    {
+                        highestPlayerValue = newVal;
+                    }
+                }
+            }
+
+            private void DealerPlaying()
+            {
+                if (highestPlayerValue == -1)
+                { // every Player over 21
+                    for (int i = 0; i < 3; i++)
+                    {
+                        winAmounts[i] = 0;
+                    }
+                    state = GameState.idle;
+                }
+                else 
+                {
+                    int dealerValue = GetValueFromHand(dealerCards);
+
+                    if (dealerValue < 21 && (dealerValue <= highestPlayerValue && dealerValue < 19))
+                    {
+                        dealerCards.Add(RemoveRandomCardFromDeck(ref gameCards));
+                    }
+                    else
+                    {
+                        for (int i = 0; i < 3; i++)
+                        {
+                            if (players[i].state == Player.PlayerState.playing_holding)
+                            {
+                                int playerValue = GetValueFromHand(players[i].handCards);
+                                if (playerValue > dealerValue || (dealerValue > 21 && playerValue <= 21))
+                                {
+                                    winAmounts[i] = players[i].betValue * 2;
+                                }
+                                if (playerValue == dealerValue && playerValue < 21)
+                                {
+                                    winAmounts[i] = players[i].betValue;
+                                }
+                                if (playerValue < dealerValue && dealerValue <= 21)
+                                {
+                                    winAmounts[i] = 0;
+                                }
+                            }
+                            else
+                            {
+                                winAmounts[i] = 0;
+                            }
+
+                            Bank.singleton.AddMoneyForPlayer(players[i].currentUser, winAmounts[i]);
+                        }
+
+                        state = GameState.idle;
+                    }
+                }
+
+                if (state == GameState.idle)
+                {
+                    action = DelayedAction.none;
+
+                    for (int i = 0; i < playingPlayers.Count; i++)
+                    {
+                        playingPlayers[i].EnterSensor();
+                    }
+                }
+
                 UpdateDisplay();
             }
 
@@ -301,7 +795,7 @@ namespace IngameScript
                 private int betIndex = 0;
 
                 public bool doubleDown = false;
-                public int betValue { get { return betValues[betIndex]; } }
+                public int betValue { get { return moneyStepValues[betIndex]; } }
 
                 public List<PlayingCard> handCards;
 
@@ -347,14 +841,27 @@ namespace IngameScript
 
                 public void EnterSensor()
                 {
-                    state = PlayerState.selectingBet;
                     currentUser = Util.GetUserNameFromSensor(sensor);
-                    betIndex = 0;
+
+                    int playerMoney = Bank.singleton.GetMoneyForPlayer(currentUser);
+                    while (betValue > playerMoney)
+                    {
+                        betIndex--;
+                        if (betIndex <= 0)
+                        {
+                            betIndex = 0;
+                            break;
+                        }
+                    }
+
+                    handCards = new List<PlayingCard>();
+                    state = PlayerState.selectingBet;
                     UpdateButtonPannel();
                 }
 
                 public void ExitSensor()
                 {
+                    betIndex = 0;
                     state = PlayerState.empty;
                     currentUser = "";
                     handCards = new List<PlayingCard>();
@@ -365,14 +872,16 @@ namespace IngameScript
                 {
                     if (i == 0 && betIndex > 0)
                         betIndex--;
-                    if (i == 1 && betIndex < betValues.Length - 1)
-                        betIndex++;
+                    if (i == 1 && betIndex < moneyStepValues.Length - 1)
+                        if(Bank.singleton.GetMoneyForPlayer(currentUser)>=moneyStepValues[betIndex+1])
+                            betIndex++;
                     if (i == 3)
                         SetBet();
                     UpdateButtonPannel();
                 }
 
-                public bool CanSplit() {
+                public bool CanSplit()
+                {
                     for (int ha = 0; ha < handCards.Count-1; ha++)
                     {
                         for (int hb = ha+1; hb < handCards.Count; hb++)
@@ -388,9 +897,13 @@ namespace IngameScript
 
                 private void SetBet()
                 {
-                    state = PlayerState.playing_idle;
-                    handCards = new List<PlayingCard>();
-                    UpdateButtonPannel();
+                    if (Bank.singleton.GetMoneyForPlayer(currentUser) >= betValue)
+                    {
+                        Bank.singleton.AddMoneyForPlayer(currentUser, -betValue);
+                        state = PlayerState.playing_idle;
+                        handCards = new List<PlayingCard>();
+                        UpdateButtonPannel();
+                    }
                 }
 
                 public void UpdateButtonPannel() {
@@ -404,9 +917,11 @@ namespace IngameScript
                             break;
                         case PlayerState.selectingBet:
                             buttonPanel.GetSurface(0).WriteText("-");
+                            buttonPanel.GetSurface(0).FontSize = 10;
                             buttonPanel.GetSurface(0).FontColor = (betIndex > 0) ? Color.Green : Color.Red;
                             buttonPanel.GetSurface(1).WriteText("+");
-                            buttonPanel.GetSurface(1).FontColor = (betIndex < betValues.Length - 1) ? Color.Green : Color.Red;
+                            buttonPanel.GetSurface(1).FontSize = 10;
+                            buttonPanel.GetSurface(1).FontColor = (betIndex < moneyStepValues.Length - 1) ? Color.Green : Color.Red;
                             buttonPanel.GetSurface(2).WriteText("");
                             buttonPanel.GetSurface(3).WriteText("Setzen");
                             buttonPanel.GetSurface(3).FontColor = Color.Green;
@@ -419,13 +934,15 @@ namespace IngameScript
                             break;
                         case PlayerState.playing_choosing:
                             buttonPanel.GetSurface(0).WriteText("Karte");
-                            buttonPanel.GetSurface(3).FontColor = Color.White;
+                            buttonPanel.GetSurface(0).FontColor = Color.Green;
+                            buttonPanel.GetSurface(0).FontSize = 5;
                             buttonPanel.GetSurface(1).WriteText("Halten");
-                            buttonPanel.GetSurface(3).FontColor = Color.White;
-                            buttonPanel.GetSurface(2).WriteText("Split");
-                            buttonPanel.GetSurface(3).FontColor = Color.Red;
+                            buttonPanel.GetSurface(1).FontColor = Color.White;
+                            buttonPanel.GetSurface(1).FontSize = 5;
+                            //buttonPanel.GetSurface(2).WriteText("Split");
+                            //buttonPanel.GetSurface(2).FontColor = Color.Aqua;
                             buttonPanel.GetSurface(3).WriteText("Double Down");
-                            buttonPanel.GetSurface(3).FontColor = Color.Aqua;
+                            buttonPanel.GetSurface(3).FontColor = Color.Yellow;
                             break;
                     }
                 }
@@ -447,7 +964,7 @@ namespace IngameScript
                     {
                         for (int i = 0; i < handCards.Count; i++)
                         {
-                            handCards[i].Display(ref frame, x + width/2 - handCards.Count* 12 + i*25, y + height / 2);
+                            handCards[i].Display(ref frame, x + width/2 - handCards.Count* 12 + i*25, y + height / 2-25);
                         }
 
                         if (handCards.Count > 0)
@@ -614,7 +1131,6 @@ namespace IngameScript
                 return value;
             }
         }
-
 
         class Util{
             public static void DrawText(ref MySpriteDrawFrame frame, int x, int y, string text, Color c, float textSize = 1)

@@ -17,6 +17,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TrainControll_Train", "Trai
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Casino", "Casino\Casino.csproj", "{689D2D78-DCAA-4A0C-83E3-F2611BB48A7F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GladOS", "GladOS\GladOS.csproj", "{6B11A79B-9ED8-4626-B856-E7737A6EE831}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -36,6 +38,8 @@ Global
 		{2BE527A7-B504-48A2-8D78-A68E3CB9B0E9}.Debug|x64.Build.0 = Debug|x64
 		{689D2D78-DCAA-4A0C-83E3-F2611BB48A7F}.Debug|x64.ActiveCfg = Debug|x64
 		{689D2D78-DCAA-4A0C-83E3-F2611BB48A7F}.Debug|x64.Build.0 = Debug|x64
+		{6B11A79B-9ED8-4626-B856-E7737A6EE831}.Debug|x64.ActiveCfg = Debug|x64
+		{6B11A79B-9ED8-4626-B856-E7737A6EE831}.Debug|x64.Build.0 = Debug|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
