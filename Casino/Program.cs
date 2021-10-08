@@ -36,36 +36,56 @@ namespace IngameScript
 
         BlackJack blackJack;
         Bank bank;
+        SlotMachine slotMachine;
+        LuckyWheel luckyWheel;
 
         public static Dictionary<string, int> userMoney;
-        public static Program singleton;
+        public static Program program;
 
         public static int[] moneyStepValues = new int[] { 50, 100, 150, 200, 250, 500, 1000, 1500, 2000, 2500, 5000, 10000, 15000, 20000, 25000, 50000, 100000, 150000, 200000, 250000, 500000, 1000000, 1500000, 2000000, 2500000, 5000000, 10000000 };
 
-
         public Program()
         {
-            singleton = this;
+            program = this;
 
             IMyCargoContainer vault = GridTerminalSystem.GetBlockWithName("Vault") as IMyCargoContainer;
             IMyTextSurface bankMonitor = GridTerminalSystem.GetBlockWithName("Bank Monitor") as IMyTextSurface;
 
-            bank = new Bank(vault, bankMonitor, new Bank.Station(GridTerminalSystem.GetBlockGroupWithName("BS0")));
+            bank = new Bank(vault, bankMonitor,
+                new Bank.Station(tryGetBlockGroup("BS0")),
+                new Bank.Station(tryGetBlockGroup("BS1"))
+                );
 
             bank.LoadUserMoney(Me);
 
+            luckyWheel = new LuckyWheel(tryGetBlockGroup("LW"));
 
             IMyTextSurface blackJackMonitor = GridTerminalSystem.GetBlockWithName("BlackJack Monitor") as IMyTextSurface;
 
             blackJack = new BlackJack(
                 blackJackMonitor,
-                new BlackJack.Player(GridTerminalSystem.GetBlockGroupWithName("BJ0")),
-                new BlackJack.Player(GridTerminalSystem.GetBlockGroupWithName("BJ1")),
-                new BlackJack.Player(GridTerminalSystem.GetBlockGroupWithName("BJ2"))
+                new BlackJack.Player(tryGetBlockGroup("BJ0")),
+                new BlackJack.Player(tryGetBlockGroup("BJ1")),
+                new BlackJack.Player(tryGetBlockGroup("BJ2"))
             );
 
+            slotMachine = new SlotMachine(
+                new SlotMachine.Station(tryGetBlockGroup("SM0"))
+                );
 
-            Runtime.UpdateFrequency = UpdateFrequency.Update100;
+
+            Runtime.UpdateFrequency = UpdateFrequency.Update10;
+        }
+
+        private IMyBlockGroup tryGetBlockGroup(string name)
+        {
+            IMyBlockGroup bg = GridTerminalSystem.GetBlockGroupWithName(name);
+
+            if (bg == null) {
+                Echo("Group: '"+name+ "' not found");
+            }
+
+            return bg;
         }
 
         public void Save()
@@ -99,6 +119,12 @@ namespace IngameScript
                             case "BS":
                                 bank.OnActionCall(args[2], id);
                                 break;
+                            case "SM":
+                                slotMachine.OnActionCall(args[2], id);
+                                break;
+                            case "LW":
+                                luckyWheel.OnActionCall(args[2]);
+                                break;
                             default:
                                 Echo("Wrong argument!");
                                 break;
@@ -113,10 +139,389 @@ namespace IngameScript
             }
 
             bank.UpdateTick();
+            slotMachine.UpdateTick();
+            luckyWheel.UpdateTick();
+        }
 
-            if (bank.stations[0].cargo.GetInventory().ItemCount > 0)
+        class LuckyWheel {
+
+            IMyTextSurface display;
+            IMySensorBlock sensor;
+            IMyMotorStator motor;
+            string currentUser;
+            bool spinning = false;
+
+            public LuckyWheel(IMyBlockGroup blockGroup)
             {
-                Echo(bank.stations[0].cargo.GetInventory().GetItemAt(0).Value.Type.SubtypeId);
+                List<IMyTextSurface> screens = new List<IMyTextSurface>();
+                blockGroup.GetBlocksOfType(screens);
+
+                if (screens.Count > 0)
+                {
+                    display = screens[0];
+
+                    display.ContentType = ContentType.SCRIPT;
+                    display.ScriptForegroundColor = Color.White;
+                    display.ScriptBackgroundColor = Color.Black;
+                    display.Script = "None";
+                }
+
+                List<IMySensorBlock> sensors = new List<IMySensorBlock>();
+                blockGroup.GetBlocksOfType(sensors);
+                if (sensors.Count > 0)
+                    sensor = sensors[0];
+
+                List<IMyMotorStator> motors = new List<IMyMotorStator>();
+                blockGroup.GetBlocksOfType(motors);
+                if (motors.Count > 0)
+                {
+                    motor = motors[0];
+                }
+                motor.TargetVelocityRPM = 0;
+            }
+
+            public void OnActionCall(string arg)
+            {
+                if (arg == "SA") // Sensor Activate
+                {
+                    EnterSensor();
+                }
+                if (arg == "SD") // Sensor Disable
+                {
+                    ExitSensor();
+                }
+
+                if (arg.StartsWith("B")) // Buttons
+                {
+                    if (currentUser != null && currentUser != "" && !spinning)
+                    {
+                        Spin();
+                        //UpdateDisplay();
+                    }
+                }
+            }
+
+            public void EnterSensor()
+            {
+                if (!spinning)
+                {
+                    currentUser = Util.GetUserNameFromSensor(sensor);
+                    UpdateDisplay();
+                }
+            }
+
+            public void ExitSensor()
+            {
+                currentUser = "";
+                UpdateDisplay();
+            }
+
+            public void UpdateTick()
+            {
+                if (spinning)
+                {
+                    motor.TargetVelocityRPM -= Math.Max(0.1F,motor.TargetVelocityRPM/50F);
+                    if (motor.TargetVelocityRPM <= 0)
+                    {
+                        motor.TargetVelocityRPM = 0;
+                        StopedSpinning();
+                    }
+                }
+            }
+
+            private void Spin()
+            {
+                if (currentUser != "" && !spinning)
+                {
+                    spinning = true;
+
+                    Random random = new Random();
+                    motor.TargetVelocityRPM = random.Next(20, 30);
+                }
+                UpdateDisplay();
+            }
+
+            private void StopedSpinning()
+            {
+                spinning = false;
+                if (currentUser != "")
+                {
+                    string[] priceTexts = new string[] { "90.000", "ROT", "60.000", "GELB", "70.000", "GELB", "80.000", "GRÜN" };
+                    double angle = motor.Angle * (180 / Math.PI);
+                    int price = (int)Math.Round((float)angle / 45F);
+
+                    switch (price)
+                    {
+                        case 0:
+                            Bank.singleton.AddMoneyForPlayer(currentUser, 90000);
+                            break;
+                        case 1:
+
+                            break;
+                        case 2:
+                            Bank.singleton.AddMoneyForPlayer(currentUser, 60000);
+                            break;
+                        case 3:
+
+                            break;
+                        case 4:
+                            Bank.singleton.AddMoneyForPlayer(currentUser, 7000);
+                            break;
+                        case 5:
+
+                            break;
+                        case 6:
+                            Bank.singleton.AddMoneyForPlayer(currentUser, 80000);
+                            break;
+                        case 7:
+
+                            break;
+                    }
+                    UpdateDisplay(priceTexts[price]);
+                }
+            }
+
+            public void UpdateDisplay(string priceText = "")
+            {
+                MySpriteDrawFrame frame = display.DrawFrame();
+
+                if (currentUser != "")
+                {
+                    Util.DrawText(ref frame, 512 / 2, 100, currentUser.ToString(), Color.White);
+
+                    if (priceText!="")
+                    {
+                        Util.DrawText(ref frame, 512 / 2, 150, priceText, Color.White);
+                    }
+                }
+
+
+                frame.Dispose();
+            }
+        }
+
+        class SlotMachine {
+            public Station[] machines;
+
+            public SlotMachine(params Station[] stations)
+            {
+                this.machines = stations;
+            }
+            public void OnActionCall(string arg, int id)
+            {
+                Station station = machines[id];
+                if (arg == "SA") // Sensor Activate
+                {
+                    station.EnterSensor();
+                }
+                if (arg == "SD") // Sensor Disable
+                {
+                    station.ExitSensor();
+                }
+
+                if (arg.StartsWith("B") && arg.Length == 2) // Buttons
+                {
+                    int btnId = int.Parse(arg.Substring(1));
+                    station.ButtonPress(btnId);
+                }
+            }
+
+            public void UpdateTick()
+            {
+                for (int i = 0; i < machines.Length; i++)
+                {
+                    machines[i].UpdateTick();
+                }
+            }
+
+            public class Station
+            {
+                IMyTextSurface display;
+                IMySensorBlock sensor;
+                IMyMotorStator[] wheels;
+                private IMyTextSurfaceProvider buttonPanel;
+                string currentUser;
+                int betIndex = 0;
+                bool spinning = false;
+                int wheelStopIndex = 0;
+
+                public Station(IMyBlockGroup blockGroup)
+                {
+                    List<IMyTextSurface> screens = new List<IMyTextSurface>();
+                    blockGroup.GetBlocksOfType(screens);
+
+                    if (screens.Count > 0)
+                    {
+                        display = screens[0];
+
+                        display.ContentType = ContentType.SCRIPT;
+                        display.ScriptForegroundColor = Color.White;
+                        display.ScriptBackgroundColor = Color.Black;
+                        display.Script = "None";
+                    }
+
+                    List<IMyButtonPanel> buttonPanels = new List<IMyButtonPanel>();
+                    blockGroup.GetBlocksOfType(buttonPanels);
+
+                    if (buttonPanels.Count > 0)
+                    {
+                        buttonPanel = (IMyTextSurfaceProvider)buttonPanels[0];
+
+                        for (int i = 0; i < 4; i++)
+                        {
+                            IMyTextSurface surface = buttonPanel.GetSurface(i);
+                            surface.ContentType = ContentType.TEXT_AND_IMAGE;
+                            surface.FontColor = Color.White;
+                            surface.BackgroundColor = Color.Black;
+                            surface.FontSize = 5;
+                            surface.Alignment = TextAlignment.CENTER;
+                        }
+                    }
+
+                    List<IMySensorBlock> sensors = new List<IMySensorBlock>();
+                    blockGroup.GetBlocksOfType(sensors);
+                    if (sensors.Count > 0)
+                        sensor = sensors[0];
+
+                    List<IMyMotorStator> motors = new List<IMyMotorStator>();
+                    blockGroup.GetBlocksOfType(motors);
+                    if (motors.Count == 3)
+                    {
+                        wheels = new IMyMotorStator[3];
+                        for (int i = 0; i < motors.Count; i++)
+                        {
+                            int id = int.Parse(motors[i].CustomName[motors[i].CustomName.Length - 1].ToString());
+                            wheels[id] = motors[i];
+                            wheels[id].UpperLimitDeg = 0;
+                            wheels[id].TargetVelocityRPM = 10;
+                        }
+                    }
+                }
+
+                public void EnterSensor()
+                {
+                    if (!spinning)
+                    {
+                        currentUser = Util.GetUserNameFromSensor(sensor);
+                        UpdateDisplay();
+                    }
+                }
+
+                public void ExitSensor()
+                {
+                    currentUser = "";
+                    UpdateDisplay();
+                }
+
+                public void ButtonPress(int btnId)
+                {
+                    if (currentUser != null && currentUser != "" && !spinning)
+                    {
+                        switch (btnId)
+                        {
+                            case 0:
+                                if (betIndex > 0)
+                                    betIndex--;
+                                break;
+                            case 1:
+                                if (betIndex < moneyStepValues.Length - 1)
+                                    if (moneyStepValues[betIndex + 1] <= Bank.singleton.GetMoneyForPlayer(currentUser))
+                                        betIndex++;
+                                break;
+                            case 3:
+                                if (moneyStepValues[betIndex] <= Bank.singleton.GetMoneyForPlayer(currentUser))
+                                    Spin();
+                                break;
+                            default:
+                                break;
+                        }
+                        UpdateDisplay();
+                    }
+                }
+
+                int wheelStopMultiply = 20;
+                public void UpdateTick()
+                {
+                    if (spinning)
+                    {
+                        if (wheelStopIndex < 3 * wheelStopMultiply)
+                        {
+                            wheelStopIndex++;
+
+                            int currentWheel = (wheelStopIndex / wheelStopMultiply) - 1;
+
+                            if (currentWheel >= 0 && currentWheel < 3 && wheels[currentWheel].UpperLimitDeg == float.MaxValue)
+                            {
+                                Random random = new Random();
+                                wheels[currentWheel].UpperLimitDeg = 45 * random.Next(0, 9);
+                            }
+                        }
+                        else
+                        {
+                            StopedSpinning();
+                        }
+                    }
+                }
+
+                private void Spin()
+                {
+                    if (currentUser!="" && !spinning)
+                    {
+                        spinning = true;
+                        wheelStopIndex = 0;
+                        for (int i = 0; i < wheels.Length; i++)
+                        {
+                            wheels[i].TargetVelocityRPM = 50;
+                            wheels[i].UpperLimitDeg = float.MaxValue;
+                        }
+                    }
+                    UpdateDisplay();
+                }
+
+                private void StopedSpinning()
+                {
+                    spinning = false;
+                    if (currentUser != "")
+                    {
+
+                    }
+
+                    UpdateDisplay();
+                }
+
+                public void UpdateDisplay()
+                {
+                    MySpriteDrawFrame frame = display.DrawFrame();
+
+                    if (currentUser != "")
+                    {
+                        Util.DrawText(ref frame, 512 / 2, 100, currentUser.ToString(), Color.White);
+                        Util.DrawText(ref frame, 512 / 2, 250, string.Format("{0,15:N0}$", moneyStepValues[betIndex]), Color.White);
+
+                    }
+
+                    if (currentUser!="" && !spinning)
+                    { 
+                        buttonPanel.GetSurface(0).WriteText("-");
+                        buttonPanel.GetSurface(0).FontSize = 10;
+                        buttonPanel.GetSurface(0).FontColor = (betIndex > 0) ? Color.Green : Color.Red;
+                        buttonPanel.GetSurface(1).WriteText("+");
+                        buttonPanel.GetSurface(1).FontSize = 10;
+                        buttonPanel.GetSurface(1).FontColor = (betIndex < moneyStepValues.Length - 1 && moneyStepValues[betIndex + 1] <= Bank.singleton.GetMoneyForPlayer(currentUser)) ? Color.Green : Color.Red;
+                        buttonPanel.GetSurface(2).WriteText("");
+                        buttonPanel.GetSurface(3).WriteText("Drehen");
+                        buttonPanel.GetSurface(3).FontColor = Color.Green;
+                    }
+                    else
+                    {
+                        buttonPanel.GetSurface(0).WriteText("");
+                        buttonPanel.GetSurface(1).WriteText("");
+                        buttonPanel.GetSurface(2).WriteText("");
+                        buttonPanel.GetSurface(3).WriteText("");
+                    }
+
+                    frame.Dispose();
+                }
             }
         }
 
@@ -251,13 +656,18 @@ namespace IngameScript
                         display.ScriptBackgroundColor = Color.Black;
                         display.Script = "None";
                     }
+                    else
+                    {
+                        program.Echo("Bank: " + blockGroup.Name + " No Screen Found");
+                    }
 
-                    List<IMyTextSurfaceProvider> buttonPanels = new List<IMyTextSurfaceProvider>();
+
+                    List<IMyButtonPanel> buttonPanels = new List<IMyButtonPanel>();
                     blockGroup.GetBlocksOfType(buttonPanels);
 
                     if (buttonPanels.Count > 0)
                     {
-                        buttonPanel = buttonPanels[0];
+                        buttonPanel = (IMyTextSurfaceProvider)buttonPanels[0];
 
                         for (int i = 0; i < 4; i++)
                         {
@@ -269,21 +679,43 @@ namespace IngameScript
                             surface.Alignment = TextAlignment.CENTER;
                         }
                     }
+                    else
+                    {
+                        program.Echo("Bank: " + blockGroup.Name + " No ButtonPannel Found");
+                    }
 
                     List<IMySensorBlock> sensors = new List<IMySensorBlock>();
                     blockGroup.GetBlocksOfType(sensors);
                     if (sensors.Count > 0)
+                    {
                         sensor = sensors[0];
+                    }
+                    else
+                    {
+                        program.Echo("Bank: " + blockGroup.Name + " No Sensor Found");
+                    }
 
                     List<IMyCargoContainer> cargos = new List<IMyCargoContainer>();
                     blockGroup.GetBlocksOfType(cargos);
                     if (cargos.Count > 0)
+                    {
                         cargo = cargos[0];
+                    }
+                    else
+                    {
+                        program.Echo("Bank: " + blockGroup.Name + " No CargoContainer Found");
+                    }
 
                     List<IMyShipConnector> connectors = new List<IMyShipConnector>();
                     blockGroup.GetBlocksOfType(connectors);
                     if (connectors.Count > 0)
+                    {
                         connector = connectors[0];
+                    }
+                    else
+                    {
+                        program.Echo("Bank: " + blockGroup.Name + " No Connector Found");
+                    }
                 }
 
                 public void EnterSensor()
@@ -298,9 +730,20 @@ namespace IngameScript
                     currentUser = "";
                     UpdateDisplay();
                 }
+                bool tick = false;
                 public void UpdateDisplay()
                 {
                     MySpriteDrawFrame frame = display.DrawFrame();
+                    frame.Add(new MySprite());
+
+                    if (tick)
+                    {
+                        frame.Add(new MySprite());
+                        frame.Add(new MySprite());
+                        frame.Add(new MySprite());
+                        frame.Add(new MySprite());
+                    }
+                    tick = !tick;
 
                     if(currentUser != "")
                     {
@@ -652,7 +1095,7 @@ namespace IngameScript
                 return true;
             }
 
-            int delayedCooldown = 1;
+            int delayedCooldown = 10;
             public void ExecuteDaelayedAction()
             {
                 if (action != DelayedAction.none)
@@ -663,7 +1106,7 @@ namespace IngameScript
                     }
                     else
                     {
-                        delayedCooldown = 1;
+                        delayedCooldown = 10;
 
                         switch (action)
                         {
@@ -810,12 +1253,12 @@ namespace IngameScript
                 }
                 public Player(IMyBlockGroup blockGroup)
                 {
-                    List<IMyTextSurfaceProvider> buttonPanels = new List<IMyTextSurfaceProvider>();
+                    List<IMyButtonPanel> buttonPanels = new List<IMyButtonPanel>();
                     blockGroup.GetBlocksOfType(buttonPanels);
 
                     if (buttonPanels.Count > 0)
                     {
-                        buttonPanel = buttonPanels[0];
+                        buttonPanel = (IMyTextSurfaceProvider)buttonPanels[0];
 
                         for (int i = 0; i < 4; i++)
                         {
@@ -1132,7 +1575,8 @@ namespace IngameScript
             }
         }
 
-        class Util{
+        class Util
+        {
             public static void DrawText(ref MySpriteDrawFrame frame, int x, int y, string text, Color c, float textSize = 1)
             {
                 MySprite sprite = new MySprite()

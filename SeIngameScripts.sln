@@ -19,6 +19,12 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Casino", "Casino\Casino.csp
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GladOS", "GladOS\GladOS.csproj", "{6B11A79B-9ED8-4626-B856-E7737A6EE831}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Skybase", "Skybase\Skybase.csproj", "{7898683C-8836-4154-904A-F4D5EEA26AF6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Battery Trigger", "Battery Trigger\Battery Trigger.csproj", "{6A4A5BF9-F6D6-47D4-ACB2-B66CD8613EFF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ShipAI", "ShipAI\ShipAI.csproj", "{AB20E4B2-1237-4BDA-95BE-8410724DADEC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -40,6 +46,12 @@ Global
 		{689D2D78-DCAA-4A0C-83E3-F2611BB48A7F}.Debug|x64.Build.0 = Debug|x64
 		{6B11A79B-9ED8-4626-B856-E7737A6EE831}.Debug|x64.ActiveCfg = Debug|x64
 		{6B11A79B-9ED8-4626-B856-E7737A6EE831}.Debug|x64.Build.0 = Debug|x64
+		{7898683C-8836-4154-904A-F4D5EEA26AF6}.Debug|x64.ActiveCfg = Debug|x64
+		{7898683C-8836-4154-904A-F4D5EEA26AF6}.Debug|x64.Build.0 = Debug|x64
+		{6A4A5BF9-F6D6-47D4-ACB2-B66CD8613EFF}.Debug|x64.ActiveCfg = Debug|x64
+		{6A4A5BF9-F6D6-47D4-ACB2-B66CD8613EFF}.Debug|x64.Build.0 = Debug|x64
+		{AB20E4B2-1237-4BDA-95BE-8410724DADEC}.Debug|x64.ActiveCfg = Debug|x64
+		{AB20E4B2-1237-4BDA-95BE-8410724DADEC}.Debug|x64.Build.0 = Debug|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
