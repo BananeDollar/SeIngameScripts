@@ -25,7 +25,19 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Battery Trigger", "Battery 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ShipAI", "ShipAI\ShipAI.csproj", "{AB20E4B2-1237-4BDA-95BE-8410724DADEC}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Dummy", "Dummy\Dummy.csproj", "{BDBAEF97-DCCF-44FC-AF3A-6D3F9959B570}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GalNet Server", "GalNet\GalNet Server.csproj", "{C6681592-6C6C-4BF5-974B-8884950D78B4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GalNet Client", "GalNet Client\GalNet Client.csproj", "{F405381B-5EED-41D0-B259-C9606997C500}"
+EndProject
+Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "RobotArm", "RobotArm\RobotArm.shproj", "{61EBA249-19F3-48B6-A25B-A4CEE90168BA}"
+EndProject
 Global
+	GlobalSection(SharedMSBuildProjectFiles) = preSolution
+		RobotArm\RobotArm.projitems*{61eba249-19f3-48b6-a25b-a4cee90168ba}*SharedItemsImports = 13
+		RobotArm\RobotArm.projitems*{bdbaef97-dccf-44fc-af3a-6d3f9959b570}*SharedItemsImports = 4
+	EndGlobalSection
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
 	EndGlobalSection
@@ -52,6 +64,12 @@ Global
 		{6A4A5BF9-F6D6-47D4-ACB2-B66CD8613EFF}.Debug|x64.Build.0 = Debug|x64
 		{AB20E4B2-1237-4BDA-95BE-8410724DADEC}.Debug|x64.ActiveCfg = Debug|x64
 		{AB20E4B2-1237-4BDA-95BE-8410724DADEC}.Debug|x64.Build.0 = Debug|x64
+		{BDBAEF97-DCCF-44FC-AF3A-6D3F9959B570}.Debug|x64.ActiveCfg = Debug|x64
+		{BDBAEF97-DCCF-44FC-AF3A-6D3F9959B570}.Debug|x64.Build.0 = Debug|x64
+		{C6681592-6C6C-4BF5-974B-8884950D78B4}.Debug|x64.ActiveCfg = Debug|x64
+		{C6681592-6C6C-4BF5-974B-8884950D78B4}.Debug|x64.Build.0 = Debug|x64
+		{F405381B-5EED-41D0-B259-C9606997C500}.Debug|x64.ActiveCfg = Debug|x64
+		{F405381B-5EED-41D0-B259-C9606997C500}.Debug|x64.Build.0 = Debug|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
